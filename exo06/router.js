@@ -1,52 +1,52 @@
 const express = require("express");
+const bodyParser = require("body-parser");
 const router = express.Router();
 
 let persons = require("./data");
 let counter = persons.length + 1;
 
+
+const db= require('./db/mongoose');
+const Persons = db.persons;
+
 router
+    .use(bodyParser.json()) // for parsing application/json
+    .use(bodyParser.urlencoded({extended: true}))// for parsing application/x-www-form-urlencoded
+
     .get("/", (req, res) => {
         res.sendFile(__dirname + '/index.html')
     })
-    .get("/persons", (req, res, next) => {
-        if (Object.keys(req.query).length === 0) {
-            res.json(persons);
-            return;
-        }
-        if (req.query.name === undefined) {
-            next();
-            return;
-        }
-        res.json(persons.filter(p => p.name === req.query.name));
+    .get('/persons',
+        (req, res) => {
+            Persons.find({})
+                .exec((err, data) => {
+                    if (err) console.log("error in get persons", err);
+                    else res.json(data);
+                })
     })
-    .get("/persons/:id", (req, res) => {
-        res.json(persons.find(p => p.id === req.params.id));
+    .post('/persons',
+    (req, res) => {
+        const p = new Persons(req.body);
+        p.save()
+            .then(res.redirect(303, '/persons'))
+            .catch(err => res.status(400).send("unable to save to database", err));
     })
-
-    .post("/", (req, res) => {
-        req.body.id = counter++;
-        persons.push(req.body);
-        res.json(persons);
+    .delete('/persons/:index',
+    (req, res) => {
+      Persons.findByIdAndDelete(req.params.index)
+            .then(res.redirect(303, '/persons'))
+            .catch(err => res.status(400).send("unable to delete from database", err));
+   })
+   .patch('/persons/:index',
+   (req, res) => {
+       Persons.findOneAndUpdate({_id: req.params.index}, req.body)
+           .then(res.redirect(303, '/persons'))
+           .catch(err => res.status(400).send("unable to delete from database", err));
+   })
+   .use((req, res) => {
+    res.status(400);
+    res.json({error: "Bad request"});
     })
-
-    .put("/persons/:id", (req, res) => {
-        let idx = persons.findIndex(p => p.id === +req.params.id);
-        if (idx > -1) {
-            persons[idx].name = req.body.name;
-        }
-        res.end();
-    })
-
-    .delete("/persons/:id", (req, res) => {
-        let id = +req.params.id;
-        persons = persons.filter(p => p.id !== id);
-        res.end();
-    })
-
-    .use((req, res) => {
-        res.status(400);
-        res.json({error: "Bad request"});
-    });
-
+    ;
 
 module.exports = router;
